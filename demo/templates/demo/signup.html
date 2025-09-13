@@ -157,7 +157,7 @@
     <!-- Form Container --> 
     <div class="form-container"> 
       <div class="sign-up-title">Sign Up</div> 
-      <form method="post" onsubmit="return validateForm()"> 
+      <form method="post"> 
         {% csrf_token %} 
  
         <!-- Username --> 
@@ -180,12 +180,9 @@
         <button type="submit" class="sign-up-button">Sign Up</button> 
       </form> 
  
-      <!-- Already have an account? --> 
-      <div class="already-account"> 
-        Already have an account? <a href="{% url 'login' %}">Log In</a> 
-      </div> 
  
-      <!-- Sign In Button --> 
+ 
+      <!-- Sign In Button -->
       <button class="signin-button" onclick="window.location.href='{% url 'login' %}'">Already have an account? Log in</button> 
     </div> 
   </div> 
@@ -211,6 +208,22 @@
         return false; 
       } 
  
+      // Password strength validation
+      if (password1.length < 8) {
+        alert("Password must be at least 8 characters long.");
+        return false;
+      }
+
+      // Check for at least one uppercase, one lowercase, one number
+      var hasUpper = /[A-Z]/.test(password1);
+      var hasLower = /[a-z]/.test(password1);
+      var hasNumber = /\d/.test(password1);
+      
+      if (!hasUpper || !hasLower || !hasNumber) {
+        alert("Password must contain at least one uppercase letter, one lowercase letter, and one number.");
+        return false;
+      } 
+ 
       // Email format is already handled by type="email" attribute 
       // You can add more checks if necessary, e.g., for email uniqueness 
  
@@ -218,5 +231,4 @@
       return true; 
     } 
   </script> 
-</body> 
-</html>
+</body>

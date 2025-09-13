@@ -12,39 +12,75 @@ from .forms import SignUpForm, UserProfileForm, FeedbackForm
 from .utils import generate_otp, send_otp_email
 
 def signup_view(request):
+    print(f"DEBUG: Request method: {request.method}")
+    
     if request.method == 'POST':
-        form = SignUpForm(request.POST)
-        if form.is_valid():
-            username = form.cleaned_data['username']
-            email = form.cleaned_data['email']
-            password1 = form.cleaned_data['password1']
-            password2 = form.cleaned_data['password2']
+        username = request.POST.get('username')
+        email = request.POST.get('email')
+        password1 = request.POST.get('password1')
+        password2 = request.POST.get('password2')
 
-            # Check if passwords match
-            if password1 != password2:
-                messages.error(request, "Passwords do not match!")
-                return redirect('signup')
+        print(f"DEBUG: Received POST data - username: {username}, email: {email}")
+        print(f"DEBUG: Password1: {password1}, Password2: {password2}")
+        
+        # Validate required fields
+        if not username or not email or not password1 or not password2:
+            print("DEBUG: Missing required fields")
+            messages.error(request, "All fields are required!")
+            return render(request, 'demo/signup.html')
 
-            # Check if the email is already in use
-            if User.objects.filter(email=email).exists():
-                messages.error(request, "Email is already registered!")
-                return redirect('signup')
+        # Check if passwords match
+        if password1 != password2:
+            print("DEBUG: Passwords don't match")
+            messages.error(request, "Passwords do not match!")
+            return render(request, 'demo/signup.html')
 
-            # Create and save user
+        # Check if username already exists
+        if User.objects.filter(username=username).exists():
+            print("DEBUG: Username already exists")
+            messages.error(request, "Username is already taken!")
+            print("DEBUG: Error message set, rendering template")
+            return render(request, 'demo/signup.html')
+
+        # Check if the email is already in use
+        if User.objects.filter(email=email).exists():
+            print("DEBUG: Email already exists")
+            messages.error(request, "Email is already registered!")
+            return render(request, 'demo/signup.html')
+
+        print("DEBUG: All validations passed, creating user...")
+        
+        # Create and save user
+        try:
             user = User.objects.create_user(username=username, email=email, password=password1)
             user.is_active = False  # Deactivate account till it is confirmed
             user.save()
+            print(f"DEBUG: User created successfully - ID: {user.id}")
 
             # Generate and send OTP
             otp = generate_otp()
             EmailVerificationCode.objects.create(user=user, code=otp)
-            send_otp_email(user, otp)
-
+            print(f"DEBUG: OTP created: {otp}")
+            
+            try:
+                send_otp_email(user, otp)
+                print("DEBUG: Email sent successfully")
+            except Exception as email_error:
+                print(f"DEBUG: Email failed: {email_error}")
+            
             request.session['user_id'] = user.id
+            print(f"DEBUG: Session user_id set to: {user.id}")
+            messages.success(request, "Account created! Please check your email for verification code.")
+            print("DEBUG: About to redirect to verify_otp")
             return redirect('verify_otp')
-    else:
-        form = SignUpForm()
-    return render(request, 'demo/signup.html', {'form': form})
+            
+        except Exception as e:
+            print(f"DEBUG: User creation failed: {e}")
+            messages.error(request, f"Account creation failed: {str(e)}")
+            return render(request, 'demo/signup.html')
+    
+    print("DEBUG: Rendering signup.html")
+    return render(request, 'demo/signup.html')
 
 def verify_otp(request):
     if request.method == 'POST':
@@ -232,3 +268,84 @@ def contact_us(request):
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+def forgot_password_view(request):
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        
+        try:
+            user = User.objects.get(email=email)
+            
+            # Generate password reset code
+            reset_code = generate_otp()
+            
+            # Delete existing reset codes for this user
+            EmailVerificationCode.objects.filter(user=user).delete()
+            
+            # Create new reset code
+            EmailVerificationCode.objects.create(user=user, code=reset_code)
+            
+            # Send reset email
+            try:
+                subject = 'Password Reset Code - LowPocEat'
+                message = f'Your password reset code is: {reset_code}\n\nThis code will expire in 24 hours.'
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email]
+                )
+                
+                request.session['reset_email'] = email
+                messages.success(request, "Password reset code sent to your email.")
+                return redirect('reset_password')
+                
+            except Exception as e:
+                messages.error(request, f"Failed to send email: {str(e)}")
+                
+        except User.DoesNotExist:
+            messages.error(request, "No account found with this email address.")
+            
+    return render(request, 'demo/forgot_password.html')
+
+def reset_password_view(request):
+    if request.method == 'POST':
+        reset_code = request.POST.get('reset_code')
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+        email = request.session.get('reset_email')
+        
+        if not email:
+            messages.error(request, "Session expired. Please request a new reset code.")
+            return redirect('forgot_password')
+            
+        if new_password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, 'demo/reset_password.html')
+            
+        try:
+            user = User.objects.get(email=email)
+            verification_code = EmailVerificationCode.objects.get(user=user, code=reset_code)
+            
+            if verification_code.is_expired():
+                messages.error(request, "Reset code has expired. Please request a new one.")
+                return redirect('forgot_password')
+                
+            # Reset password
+            user.set_password(new_password)
+            user.save()
+            
+            # Delete the verification code
+            verification_code.delete()
+            
+            # Clear session
+            if 'reset_email' in request.session:
+                del request.session['reset_email']
+                
+            messages.success(request, "Password reset successfully! You can now log in.")
+            return redirect('login')
+            
+        except (User.DoesNotExist, EmailVerificationCode.DoesNotExist):
+            messages.error(request, "Invalid reset code.")
+            
+    return render(request, 'demo/reset_password.html')

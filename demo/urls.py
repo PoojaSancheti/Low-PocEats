@@ -13,5 +13,7 @@ urlpatterns = [
     path('feedback/', views.feedback_page, name='feedback_page'),
     path('contact_us/', views.contact_us, name='contact_us'),
     path('logout/', views.logout_view, name='logout'),
-    path('', views.home_view, name='root'),
+    path('forgot_password/', views.forgot_password_view, name='forgot_password'),
+    path('reset_password/', views.reset_password_view, name='reset_password'),
+    path('', views.login_view, name='root'),
 ]
