@@ -1,3 +1,10 @@
+# Ignore Docker and deployment files
+Dockerfile
+docker-compose.yml
+docker-compose.prod.yml
+entrypoint.sh
+nginx.conf
+qodana.yaml
 # Environment variables
 .env
 .env.local
